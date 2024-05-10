@@ -1,398 +1,466 @@
-# Installing TensorFlow from Sources
+# graphp/graphviz
 
-This guide explains how to build TensorFlow sources into a TensorFlow
-binary and how to install that TensorFlow binary.  Note that we provide
-well-tested, pre-built TensorFlow binaries for Linux, Mac, and Windows
-systems. In addition, there are pre-built TensorFlow
-[docker images](https://hub.docker.com/r/tensorflow/tensorflow/).
-So, don't build a TensorFlow binary yourself unless you are very
-comfortable building complex packages from source and dealing with
-the inevitable aftermath should things not go exactly as documented.
+[![CI status](https://github.com/graphp/graphviz/workflows/CI/badge.svg)](https://github.com/graphp/graphviz/actions)
 
-If the last paragraph didn't scare you off, welcome.  This guide explains
-how to build TensorFlow on the following operating systems:
+GraphViz graph drawing for the mathematical graph/network library GraPHP.
 
-*   Ubuntu
-*   Mac OS X
+> **Development version:** This branch contains the code for the upcoming 1.0 release.
+> For the code of the current stable 0.2 release, check out the
+> [`0.2.x` branch](https://github.com/graphp/graphviz/tree/0.2.x).
+>
+> The upcoming 1.0 release will be the way forward for this package.
+> However, we will still actively support 0.2.x for those not yet
+> on the latest version.
+> See also [installation instructions](#install) for more details.
 
-We don't officially support building TensorFlow on Windows; however, you may try
-to build TensorFlow on Windows if you don't mind using the highly experimental
-[Bazel on Windows](https://bazel.build/versions/master/docs/windows.html)
-or
-[TensorFlow CMake build](https://github.com/tensorflow/tensorflow/tree/r0.12/tensorflow/contrib/cmake).
+The library supports visualizing graph images, including them into webpages,
+opening up images from within CLI applications and exporting them
+as PNG, JPEG or SVG file formats (among many others).
+Because [graph drawing](http://en.wikipedia.org/wiki/Graph_drawing) is a complex area on its own,
+the actual layouting of the graph is left up to the excelent [GraphViz](http://www.graphviz.org/)
+"Graph Visualization Software" and we merely provide some convenient APIs to interface with GraphViz.
 
+**Table of contents**
 
-## Determine which TensorFlow to install
+* [Quickstart examples](#quickstart-examples)
+* [Attributes](#attributes)
+  * [Graph attributes](#graph-attributes)
+  * [Vertex attributes](#vertex-attributes)
+  * [Edge attributes](#edge-attributes)
+* [Labels](#labels)
+  * [Vertex labels](#vertex-labels)
+  * [Edge labels](#edge-labels)
+  * [HTML-like labels](#html-like-labels)
+  * [Record-based nodes](#record-based-nodes)
+* [Install](#install)
+* [Tests](#tests)
+* [License](#license)
 
-You must choose one of the following types of TensorFlow to build and
-install:
+## Quickstart examples
 
-* **TensorFlow with CPU support only**. If your system does not have a
-  NVIDIA® GPU, build and install this version. Note that this version of
-  TensorFlow is typically easier to build and install, so even if you
-  have an NVIDIA GPU, we recommend building and installing this version
-  first.
-* **TensorFlow with GPU support**. TensorFlow programs typically run
-  significantly faster on a GPU than on a CPU. Therefore, if your system
-  has a NVIDIA GPU and you need to run performance-critical applications,
-  you should ultimately build and install this version.
-  Beyond the NVIDIA GPU itself, your system must also fulfill the NVIDIA
-  software requirements described in one of the following documents:
+Once [installed](#install), let's build and display a sample graph:
 
-  * @{$install_linux#NVIDIARequirements$Installing TensorFlow on Ubuntu}
-  * @{$install_mac#NVIDIARequirements$Installing TensorFlow on Mac OS}
+````php
+$graph = new Graphp\Graph\Graph();
 
+$blue = $graph->createVertex();
+$blue->setAttribute('id', 'blue');
+$blue->setAttribute('graphviz.color', 'blue');
 
-## Clone the TensorFlow repository
+$red = $graph->createVertex();
+$red->setAttribute('id', 'red');
+$red->setAttribute('graphviz.color', 'red');
 
-Start the process of building TensorFlow by cloning a TensorFlow
-repository.
+$edge = $graph->createEdgeDirected($blue, $red);
+$edge->setAttribute('graphviz.color', 'grey');
 
-To clone **the latest** TensorFlow repository, issue the following command:
+$graphviz = new Graphp\GraphViz\GraphViz();
+$graphviz->display($graph);
+````
 
-<pre>$ <b>git clone https://github.com/tensorflow/tensorflow</b> </pre>
+The above code will open your default image viewer with the following image:
 
-The preceding <code>git clone</code> command creates a subdirectory
-named `tensorflow`.  After cloning, you may optionally build a
-**specific branch** (such as a release branch) by invoking the
-following commands:
+![red-blue](examples/01-simple.png)
 
-<pre>
-$ <b>cd tensorflow</b>
-$ <b>git checkout</b> <i>Branch</i> # where <i>Branch</i> is the desired branch
-</pre>
+See also the [examples](examples/).
 
-For example, to work with the `r1.0` release instead of the master release,
-issue the following command:
+## Attributes
 
-<pre>$ <b>git checkout r1.0</b></pre>
+GraphViz supports a number of attributes on the graph instance itself, each
+vertex instance (GraphViz calls these "nodes") and edge instance. Any of these
+GraphViz attributes are supported by this library and have to be assigned using
+GraPHP attributes as documented below.
 
-Next, you must prepare your environment for
-[Linux](#PrepareLinux)
-or
-[Mac OS](#PrepareMac)
+For the full list of all GraphViz attributes, please refer to the
+[GraphViz documentation](https://graphviz.gitlab.io/_pages/doc/info/attrs.html).
 
+Note that all attributes use UTF-8 encoding (Unicode) and will be quoted and
+escaped by default, so a `ö` and `>` will appear as-is and will not be
+interpreted as HTML. See also [HTML-like labels](#html-like-labels) below for
+more details.
 
-<a name="#PrepareLinux"></a>
-## Prepare environment for Linux
+### Graph attributes
 
-Before building TensorFlow on Linux, install the following build
-tools on your system:
+GraphViz supports a number of attributes on the graph instance itself. Any of
+these GraphViz attributes are supported by this library and have to be assigned
+on the graph instance with the `graphviz.graph.` prefix like this:
 
-  * bazel
-  * TensorFlow Python dependencies
-  * optionally, NVIDIA packages to support TensorFlow for GPU.
-
-
-### Install Bazel
-
-If bazel is not installed on your system, install it now by following
-[these directions](https://bazel.build/versions/master/docs/install.html).
-
-
-### Install TensorFlow Python dependencies
-
-To install TensorFlow, you must install the following packages:
-
-  * `numpy`, which is a numerical processing package that TensorFlow requires.
-  * `dev`, which enables adding extensions to Python.
-  * `pip`, which enables you to install and manage certain Python packages.
-  * `wheel`, which enables you to manage Python compressed packages in
-    the wheel (.whl) format.
-
-To install these packages for Python 2.7, issue the following command:
-
-<pre>
-$ <b>sudo apt-get install python-numpy python-dev python-pip python-wheel</b>
-</pre>
-
-To install these packages for Python 3.n, issue the following command:
-
-<pre>
-$ <b>sudo apt-get install python3-numpy python3-dev python3-pip python3-wheel</b>
-</pre>
-
-
-### Optional: install TensorFlow for GPU prerequisites
-
-If you are building TensorFlow without GPU support, skip this section.
-
-The following NVIDIA <i>hardware</i> must be installed on your system:
-
-  * GPU card with CUDA Compute Capability 3.0 or higher.  See
-    [NVIDIA documentation](https://developer.nvidia.com/cuda-gpus)
-    for a list of supported GPU cards.
-
-The following NVIDIA <i>software</i> must be installed on your system:
-
-  * NVIDIA's Cuda Toolkit (>= 7.0). We recommend version 8.0.
-    For details, see
-    [NVIDIA's documentation](http://docs.nvidia.com/cuda/cuda-installation-guide-linux/#axzz4VZnqTJ2A).
-    Ensure that you append the relevant Cuda pathnames to the
-    `LD_LIBRARY_PATH` environment variable as described in the
-    NVIDIA documentation.
-  * The NVIDIA drivers associated with NVIDIA's Cuda Toolkit.
-  * cuDNN (>= v3). We recommend version 5.1. For details, see
-    [NVIDIA's documentation](https://developer.nvidia.com/cudnn),
-    particularly the description of appending the appropriate pathname
-    to your `LD_LIBRARY_PATH` environment variable.
-
-Finally, you must also install `libcupti-dev` by invoking the following
-command:
-
-<pre> $ <b>sudo apt-get install libcupti-dev</b> </pre>
-
-
-### Next
-
-After preparing the environment, you must now
-[configure the installation](#ConfigureInstallation).
-
-
-<a name="PrepareMac"></a>
-## Prepare environment for Mac OS
-
-Before building TensorFlow, you must install the following on your system:
-
-  * bazel
-  * TensorFlow Python dependencies.
-  * optionally, NVIDIA packages to support TensorFlow for GPU.
-
-
-### Install bazel
-
-If bazel is not installed on your system, install it now by following
-[these directions](https://bazel.build/versions/master/docs/install.html#mac-os-x).
-
-
-### Install python dependencies
-
-To install TensorFlow, you must install the following packages:
-
-  * six
-  * numpy, which is a numerical processing package that TensorFlow requires.
-  * wheel, which enables you to manage Python compressed packages
-    in the wheel (.whl) format.
-
-You may install the python dependencies using pip. If you don't have pip
-on your machine, we recommend using homebrew to install Python and pip as
-[documented here](http://docs.python-guide.org/en/latest/starting/install/osx/).
-If you follow these instructions, you will not need to disable SIP.
-
-After installing pip, invoke the following commands:
-
-<pre> $ <b>sudo pip install six numpy wheel</b> </pre>
-
-
-
-### Optional: install TensorFlow for GPU prerequisites
-
-If you do not have brew installed, install it by following
-[these instructions](http://brew.sh/).
-
-After installing brew, install GNU coreutils by issuing the following command:
-
-<pre>$ <b>brew install coreutils</b></pre>
-
-If you want to compile tensorflow and have XCode 7.3 and CUDA 7.5 installed,
-note that Xcode 7.3 is not yet compatible with CUDA 7.5.  To remedy this
-problem, do either of the following:
-
-  * Upgrade to CUDA 8.0.
-  * Download Xcode 7.2 and select it as your default by issuing the following
-    command:
-
-    <pre> $ <b>sudo xcode-select -s /Application/Xcode-7.2/Xcode.app</b></pre>
-
-**NOTE:** Your system must fulfill the NVIDIA software requirements described
-in one of the following documents:
-
-  * @{$install_linux#NVIDIARequirements$Installing TensorFlow on Linux}
-  * @{$install_mac#NVIDIARequirements$Installing TensorFlow on Mac OS}
-
-
-<a name="ConfigureInstallation"></a>
-## Configure the installation
-
-The root of the source tree contains a bash script named
-<code>configure</code>. This script asks you to identify the pathname of all
-relevant TensorFlow dependencies and specify other build configuration options
-such as compiler flags. You must run this script *prior* to
-creating the pip package and installing TensorFlow.
-
-If you wish to build TensorFlow with GPU, `configure` will ask
-you to specify the version numbers of Cuda and cuDNN. If several
-versions of Cuda or cuDNN are installed on your system, explicitly select
-the desired version instead of relying on the system default.
-
-Here is an example execution of the `configure` script.  Note that your
-own input will likely differ from our sample input:
-
-
-<pre>
-$ <b>cd tensorflow</b>  # cd to the top-level directory created
-$ <b>./configure</b>
-Please specify the location of python. [Default is /usr/bin/python]: <b>/usr/bin/python2.7</b>
-Please specify optimization flags to use during compilation when bazel option "--config=opt" is specified [Default is -march=native]:
-Do you wish to use jemalloc as the malloc implementation? [Y/n]
-jemalloc enabled
-Do you wish to build TensorFlow with Google Cloud Platform support? [y/N]
-No Google Cloud Platform support will be enabled for TensorFlow
-Do you wish to build TensorFlow with Hadoop File System support? [y/N]
-No Hadoop File System support will be enabled for TensorFlow
-Do you wish to build TensorFlow with the XLA just-in-time compiler (experimental)? [y/N]
-No XLA JIT support will be enabled for TensorFlow
-Found possible Python library paths:
-  /usr/local/lib/python2.7/dist-packages
-  /usr/lib/python2.7/dist-packages
-Please input the desired Python library path to use.  Default is [/usr/local/lib/python2.7/dist-packages]
-Using python library path: /usr/local/lib/python2.7/dist-packages
-Do you wish to build TensorFlow with OpenCL support? [y/N] N
-No OpenCL support will be enabled for TensorFlow
-Do you wish to build TensorFlow with CUDA support? [y/N] Y
-CUDA support will be enabled for TensorFlow
-Please specify which gcc should be used by nvcc as the host compiler. [Default is /usr/bin/gcc]:
-Please specify the Cuda SDK version you want to use, e.g. 7.0. [Leave empty to use system default]: <b>8.0</b>
-Please specify the location where CUDA 8.0 toolkit is installed. Refer to README.md for more details. [Default is /usr/local/cuda]:
-Please specify the cuDNN version you want to use. [Leave empty to use system default]: <b>5</b>
-Please specify the location where cuDNN 5 library is installed. Refer to README.md for more details. [Default is /usr/local/cuda]:
-Please specify a list of comma-separated Cuda compute capabilities you want to build with.
-You can find the compute capability of your device at: https://developer.nvidia.com/cuda-gpus.
-Please note that each additional compute capability significantly increases your build time and binary size.
-[Default is: "3.5,5.2"]: <b>3.0</b>
-Setting up Cuda include
-Setting up Cuda lib
-Setting up Cuda bin
-Setting up Cuda nvvm
-Setting up CUPTI include
-Setting up CUPTI lib64
-Configuration finished
-</pre>
-
-If you told `configure` to build for GPU support, then `configure`
-will create a canonical set of symbolic links to the Cuda libraries
-on your system.  Therefore, every time you change the Cuda library paths,
-you must rerun the `configure` script before re-invoking
-the <code>bazel build</code> command.
-
-Note the following:
-
-  * Although it is possible to build both Cuda and non-Cuda configs
-    under the same source tree, we recommend running `bazel clean` when
-    switching between these two configurations in the same source tree.
-  * If you don't run the `configure` script *before* running the
-    `bazel build` command, the `bazel build` command will fail.
-
-
-## Build the pip package
-
-To build a pip package for TensorFlow with CPU-only support,
-invoke the following command:
-
-<pre>
-$ <b>bazel build --config=opt //tensorflow/tools/pip_package:build_pip_package</b>
-</pre>
-
-To build a pip package for TensorFlow with GPU support,
-invoke the following command:
-
-<pre>$ <b>bazel build --config=opt --config=cuda //tensorflow/tools/pip_package:build_pip_package</b> </pre>
-
-**NOTE on gcc 5 or later:** the binary pip packages available on the TensorFlow website are built with gcc 4, which uses the older ABI. To make your build compatible with the older ABI, you need to add `-cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0"` to your `bazel build` command. ABI compatibility allows custom ops built against the TensorFlow pip package to continue to work against your built package.
-
-<b>Tip:</b> By default, building TensorFlow from sources consumes
-a lot of RAM.  If RAM is an issue on your system, you may limit RAM usage
-by specifying <code>--local_resources 2048,.5,1.0</code> while
-invoking `bazel`.
-
-The <code>bazel build</code> command builds a script named
-`build_pip_package`.  Running this script as follows will build
-a `.whl` file within the `/tmp/tensorflow_pkg` directory:
-
-<pre>
-$ <b>bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg</b>
-</pre>
-
-
-## Install the pip package
-
-Invoke `pip install` to install that pip package.
-The filename of the `.whl` file depends on your platform.
-For example, the following command will install the pip package
-for TensorFlow 1.1.0 on Linux:
-
-<pre>
-$ <b>sudo pip install /tmp/tensorflow_pkg/tensorflow-1.1.0-py2-none-any.whl</b>
-</pre>
-
-## Validate your installation
-
-Validate your TensorFlow installation by doing the following:
-
-Start a terminal.
-
-Change directory (`cd`) to any directory on your system other than the
-`tensorflow` subdirectory from which you invoked the `configure` command.
-
-Invoke python:
-
-<pre>$ <b>python</b></pre>
-
-Enter the following short program inside the python interactive shell:
-
-```python
->>> import tensorflow as tf
->>> hello = tf.constant('Hello, TensorFlow!')
->>> sess = tf.Session()
->>> print(sess.run(hello))
+```php
+$graph = new Graphp\Graph\Graph();
+$graph->setAttribute('graphviz.graph.bgcolor', 'transparent');
 ```
 
-If the system outputs the following, then you are ready to begin writing
-TensorFlow programs:
+> Note how this uses the `graphviz.graph.` prefix and not just `graphviz.`. This
+  is done for consistency reasons with respect to default vertex and edge
+  attributes as documented below.
 
-<pre>Hello, TensorFlow!</pre>
+For example, the `rankdir` attribute can be used to change the orientation to
+horizontal mode (left to right) like this:
 
-If you are new to TensorFlow, see @{$get_started$Getting Started with
-TensorFlow}.
+```php
+$graph = new Graphp\Graph\Graph();
+$graph->setAttribute('graphviz.graph.rankdir', 'LR');
 
-If the system outputs an error message instead of a greeting, see [Common
-installation problems](#common_installation_problems).
+$hello = $graph->createVertex();
+$hello->setAttribute('id', 'hello');
+$world = $graph->createVertex();
+$world->setAttribute('id', 'wörld');
+$graph->createEdgeDirected($hello, $world);
+```
 
-## Common installation problems
+![html graph example](examples/02-html.png)
 
-The installation problems you encounter typically depend on the
-operating system.  See the "Common installation problems" section
-of one of the following guides:
+See also the [examples](examples/).
 
-  * @{$install_linux#CommonInstallationProblems$Installing TensorFlow on Linux}
-  * @{$install_mac#CommonInstallationProblems$Installing TensorFlow on Mac OS}
+Additionally, this library accepts an optional `graphviz.name` attribute that
+will be used as the name (or ID) for the root graph object in the DOT output if
+given. Unless explicitly assigned, this will be omitted by default. It is common
+to assign a `G` here, but usually there should be no need to assign this. Among
+others, this may be used as the title or tooltip in SVG output.
 
-Beyond the errors documented in those two guides, the following table
-notes additional errors specific to building TensorFlow.  Note that we
-are relying on Stack Overflow as the repository for build and installation
-problems.  If you encounter an error message not listed in the preceding
-two guides or in the following table, search for it on Stack Overflow.  If
-Stack Overflow doesn't show the error message, ask a new question on
-Stack Overflow and specify the `tensorflow` tag.
+```php
+$graph = new Graphp\Graph\Graph();
+$graph->setAttribute('graphviz.name', 'G');
 
-<table>
-<tr> <th>Stack Overflow Link</th> <th>Error Message</th> </tr>
+$graph->createVertex();
+```
 
-<tr>
-  <td><a href="http://stackoverflow.com/q/42013316">42013316</a></td>
-  <td><pre>ImportError: libcudart.so.8.0: cannot open shared object file:
-  No such file or directory</pre></td>
-</tr>
+### Vertex attributes
 
-<tr>
-  <td><a href="http://stackoverflow.com/q/42013316">42013316</a></td>
-  <td><pre>ImportError: libcudnn.5: cannot open shared object file:
-  No such file or directory</pre></td>
-</tr>
+GraphViz supports a number of attributes on each vertex instance (GraphViz calls
+these "node" attributes). Any of these GraphViz attributes are supported by this
+library and have to be assigned on the respective vertex instance with the
+`graphviz.` prefix like this:
 
-<tr>
-  <td><a href="http://stackoverflow.com/q/35953210">35953210</a></td>
-  <td>Invoking `python` or `ipython` generates the following error:
-  <pre>ImportError: cannot import name pywrap_tensorflow</pre></td>
-</tr>
-</table>
+```php
+$graph = new Graphp\Graph\Graph();
+
+$blue = $graph->createVertex();
+$blue->setAttribute('graphviz.color', 'blue');
+```
+
+Additionally, GraphViz also supports default attributes for all vertices. Any of
+these GraphViz attributes are supported by this library and have to be assigned
+on the graph instance with the `graphviz.node.` prefix like this:
+
+```php
+$graph = new Graphp\Graph\Graph();
+$graph->setAttribute('graphviz.node.color', 'grey');
+
+$grey = $graph->createVertex();
+```
+
+These default attributes can be overriden on each vertex instance by explicitly
+assigning the same attribute on the respective vertex instance like this:
+
+```php
+$graph = new Graphp\Graph\Graph();
+$graph->setAttribute('graphviz.node.color', 'grey');
+
+$blue = $graph->createVertex();
+$blue->setAttribute('graphviz.color', 'blue');
+```
+
+> Note how this uses the `graphviz.node.` prefix and not `graphviz.vertex.`. This
+  is done for consistency reasons with respect to how GraphViz assigns these
+  default attributes in its DOT output.
+
+### Edge attributes
+
+GraphViz supports a number of attributes on each edge instance. Any of these
+GraphViz attributes are supported by this library and have to be assigned on the
+respective edge instance with the `graphviz.` prefix like this:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$blue = $graph->createEdgeDirected($a, $b);
+$blue->setAttribute('graphviz.color', 'blue');
+```
+
+Additionally, GraphViz also supports default attributes for all edges. Any of
+these GraphViz attributes are supported by this library and have to be assigned
+on the graph instance with the `graphviz.edge.` prefix like this:
+
+```php
+$graph = new Graphp\Graph\Graph();
+$graph->setAttribute('graphviz.edge.color', 'grey');
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$grey = $graph->createEdgeDirected($a, $b);
+```
+
+These default attributes can be overriden on each edge instance by explicitly
+assigning the same attribute on the respective edge instance like this:
+
+```php
+$graph = new Graphp\Graph\Graph();
+$graph->setAttribute('graphviz.edge.color', 'grey');
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$blue = $graph->createEdgeDirected($a, $b);
+$blue->setAttribute('graphviz.color', 'blue');
+```
+
+## Labels
+
+### Vertex labels
+
+By default, GraphViz will always render the vertex ID as the label.
+If you do not assign an explicit `id` attribute to a vertex, this library will
+automatically assign a vertex ID starting at `1` in the DOT output and GraphViz
+will automatically render this vertex ID as the label. The following example
+will automatically assign `1` and `2` as the label:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$v1 = $graph->createVertex();
+$v2 = $graph->createVertex();
+```
+
+If you assign an `id` attribute to a vertex, this library will automatically
+use it as the vertex ID in the DOT output and GraphViz will automatically render
+this vertex ID as the label. The following example will automatically assign
+`blue` as the label:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$a->setAttribute('id', 'blue');
+```
+
+If you assign a `balance` attribute to a vertex, this library will automatically
+include a `label` attribute that appends the balance value in parenthesis. The
+following example will automatically assign `blue (+10)` as the label:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$blue = $graph->createVertex();
+$blue->setAttribute('id', 'blue');
+$blue->setAttribute('balance', 10);
+```
+
+You can use [vertex attributes](#vertex-attributes) to explicitly assign a
+custom `label` attribute. Note that any balance value will still be appended
+like in the previous example.
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$blue = $graph->createVertex();
+$blue->setAttribute('id', 'blue');
+$blue->setAttribute('graphviz.label', 'Hello world!');
+```
+
+Note that all [attributes](#attributes) will be quoted and escaped by default,
+so a `>` will appear as-is and will not be interpreted as HTML. See also
+[HTML-like labels](#html-like-labels) below for more details.
+
+Also note that you should either define *no* vertex IDs at all or *all* vertex
+IDs. If you only define *some* vertex IDs, the automatic numbering may yield a
+vertex ID that is already used explicitly and overwrite some of its settings.
+
+### Edge labels
+
+By default, GraphViz will not render any label on an edge:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$edge = $graph->createEdgeDirected($a, $b);
+```
+
+If you assign a `flow`, `capacity` or `weight` attribute to an edge, this library
+will automatically include a `label` attribute that includes these values. The
+following example will automatically assign `100` as the label for the weighted
+edge:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$edge = $graph->createEdgeDirected($a, $b);
+$edge->setAttribute('weight', 100);
+```
+
+The following example will automatically assign `4/10` as the label for an edge
+with both flow and maximum capacity set:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$edge = $graph->createEdgeDirected($a, $b);
+$edge->setAttribute('flow', 4);
+$edge->setAttribute('capacity', 10);
+```
+
+The following example will automatically assign `4/∞/100` as the label for a
+weighted edge with a flow and unlimited capacity:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$edge = $graph->createEdgeDirected($a, $b);
+$edge->setAttribute('flow', 4);
+$edge->setAttribute('capacity', null);
+$edge->setAttribute('weight', 100);
+```
+
+You can use [edge attributes](#edge-attributes) to explicitly assign any
+custom `label` attribute. Note that any flow, capacity or weight value will still
+be appended like in the previous examples.
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$b = $graph->createVertex();
+
+$edge = $graph->createEdgeDirected($a, $b);
+$edge->setAttribute('graphviz.label', 'important');
+```
+
+### HTML-like labels
+
+Note that all [attributes](#attributes) will be quoted and escaped by default,
+so a `>` will appear as-is and will not be interpreted as HTML. GraphViz also
+supports [HTML-like labels](https://graphviz.gitlab.io/_pages/doc/info/shapes.html#html)
+that support a subset of HTML features.
+
+GraphViz requires any HTML-like label to be wrapped in `<` and `>` and only
+supports a limited subset of HTML features as documented above. In order to
+prevent automatic quoting and escaping, all HTML-like attribute values need to
+be passed with a trailing `_html` in the attribute name like this:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$a->setAttribute('id', 'Entity');
+$a->setAttribute('graphviz.shape', 'none');
+$a->setAttribute('graphviz.label_html', '
+<table cellspacing="0" border="0" cellborder="1">
+    <tr><td bgcolor="#eeeeee"><b>\N</b></td></tr>
+    <tr><td></td></tr>
+    <tr><td>+ touch()</td></tr>
+</table>');
+
+$b = $graph->createVertex();
+$graph->createEdgeDirected($b, $a);
+$b->setAttribute('id', 'Block');
+$b->setAttribute('graphviz.shape', 'none');
+$b->setAttribute('graphviz.label_html', '
+<table cellspacing="0" border="0" cellborder="1">
+    <tr><td bgcolor="#eeeeee"><b>\N</b></td></tr>
+    <tr><td>- size:int</td></tr>
+    <tr><td>+ touch()</td></tr>
+</table>');
+```
+
+![UML html graph example](examples/11-uml-html.png)
+
+See also the [examples](examples/).
+
+### Record-based nodes
+
+Note that all [attributes](#attributes) will be quoted and escaped by default,
+so a `>` will appear as-is and will not be interpreted as HTML. Similar to the
+above [HTML-like labels](#html-like-labels), GraphViz also supports simple
+[record-based nodes](https://graphviz.gitlab.io/_pages/doc/info/shapes.html#record)
+using the `record` and `Mrecord` shape attributes and structured label attributes.
+
+GraphViz requires any record-based node label to be quoted, but uses special
+syntax to mark record fields and optional port names. In order to prevent
+automatic quoting and escaping, all record-based attribute values need to
+be passed with a trailing `_record` in the attribute name like this:
+
+```php
+$graph = new Graphp\Graph\Graph();
+
+$a = $graph->createVertex();
+$a->setAttribute('graphviz.shape', 'Mrecord');
+$a->setAttribute('graphviz.label_record', '<f0> left |<middle> middle |<f2> right'));
+
+$b = $graph->createVertex();
+$b->setAttribute('graphviz.shape', 'Mrecord');
+$b->setAttribute('graphviz.label_record', '<f0> left |<f1> middle |<right> right'));
+
+// a:middle -> b:right
+$edge = $graph->createEdgeDirected($a, $b);
+$edge->setAttribute('graphviz.tailport', 'middle');
+$edge->setAttribute('graphviz.headport', 'right');
+```
+
+![records with ports graph example](examples/13-record-ports.png)
+
+See also the [examples](examples/).
+
+## Install
+
+The recommended way to install this library is [through Composer](https://getcomposer.org/).
+[New to Composer?](https://getcomposer.org/doc/00-intro.md)
+
+Once released, this project will follow [SemVer](https://semver.org/).
+At the moment, this will install the latest development version:
+
+```bash
+composer require graphp/graphviz:^1@dev graphp/graph:^1@dev
+```
+
+See also the [CHANGELOG](CHANGELOG.md) for details about version upgrades.
+
+This project aims to run on any platform and thus does not require any PHP
+extensions and supports running on legacy PHP 5.3 through current PHP 7+.
+It's *highly recommended to use PHP 7+* for this project.
+
+The graph drawing feature is powered by the excellent [GraphViz](https://www.graphviz.org)
+software. This means you'll have to install GraphViz (`dot` executable).
+The [Graphviz homepage](https://www.graphviz.org/download/) includes complete
+installation instructions for most common platforms, users of Debian/Ubuntu-based
+distributions may simply invoke:
+
+```bash
+sudo apt install graphviz
+```
+
+## Tests
+
+To run the test suite, you first need to clone this repo and then install all
+dependencies [through Composer](https://getcomposer.org/):
+
+```bash
+composer install
+```
+
+To run the test suite, go to the project root and run:
+
+```bash
+vendor/bin/phpunit
+```
+
+## License
+
+This project is released under the permissive [MIT license](LICENSE).
+Terminal Command:
+python -m pip install --global-option=build_ext --global-option="-IC:\Program Files\Graphviz\include" --global-option="-LC:\Program Files\Graphviz\lib" pygraphviz
